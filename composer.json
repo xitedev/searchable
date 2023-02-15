@@ -1,0 +1,51 @@
+{
+    "name": "xitedev/searchable",
+    "description": "This is my package searchable",
+    "keywords": [
+        "xitedev",
+        "laravel",
+        "searchable"
+    ],
+    "homepage": "https://github.com/xitedev/searchable",
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "Xite",
+            "role": "Developer"
+        }
+    ],
+    "require": {
+        "php": "^8.2",
+        "illuminate/contracts": "^10.0",
+        "illuminate/support": "^10.0",
+        "spatie/laravel-query-builder": "^5.1"
+    },
+    "require-dev": {
+        "roave/security-advisories": "dev-latest",
+        "nunomaduro/collision": "^6.4",
+        "pestphp/pest": "^1.22.4",
+        "pestphp/pest-plugin-laravel": "^1.4"
+    },
+    "autoload": {
+        "psr-4": {
+            "Xite\\Searchable\\": "src"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Xite\\Searchable\\Tests\\": "tests"
+        }
+    },
+    "scripts": {
+        "test": "vendor/bin/pest",
+        "test-coverage": "vendor/bin/pest --coverage"
+    },
+    "config": {
+        "sort-packages": true,
+        "allow-plugins": {
+            "pestphp/pest-plugin": true
+        }
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true
+}
