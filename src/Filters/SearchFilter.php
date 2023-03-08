@@ -129,6 +129,11 @@ class SearchFilter
     {
         $model = $query->getModel();
         $table = $model->getTable();
+
+        if (!$model->incrementing) {
+            return $query;
+        }
+
         $keyName = $model->getKeyName();
 
         if (! $keyName) {
