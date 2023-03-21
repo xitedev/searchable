@@ -15,7 +15,7 @@ class SearchFilter
 
     public function __invoke(Builder $query): Builder
     {
-        if (is_null($this->value)) {
+        if (is_null($this->value) || $this->value === '') {
             return $query;
         }
 
