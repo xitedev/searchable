@@ -15,11 +15,12 @@ class TrimmedNumberFilter implements Filter
         $value = Str::of($value)
             ->trim()
             ->replaceMatches('/\W/', '')
-            ->lower();
+            ->upper();
 
         if ($value->isEmpty()) {
             return $query;
         }
+
         return $query->where($table . '.' . $property, 'LIKE', $value->prepend('%')->append('%')->toString());
     }
 }

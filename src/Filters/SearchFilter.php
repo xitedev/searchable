@@ -3,13 +3,15 @@
 namespace Xite\Searchable\Filters;
 
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Str;
 
 class SearchFilter
 {
     public function __construct(
         private readonly ?string $value = null,
-        private readonly bool $strict = false
+        private readonly bool $strict = false,
+        private readonly array $exact = []
     ) {
     }
 
@@ -19,12 +21,10 @@ class SearchFilter
             return $query;
         }
 
-        return $query->where(
-            fn (Builder $query) => $query
-                ->tap(fn (Builder $query) => $this->getSearchQuery($query))
-                ->tap(fn (Builder $query) => $this->getSearchableRelationsQuery($query))
-                ->tap(fn (Builder $query) => $this->getKeySearchQuery($query))
-        );
+        return $query
+            ->tap(fn (Builder $query) => $this->getSearchQuery($query))
+            ->tap(fn (Builder $query) => $this->getSearchableRelationsQuery($query))
+            ->tap(fn (Builder $query) => $this->getKeySearchQuery($query));
     }
 
     private function getSearchQuery(Builder $query): Builder
@@ -58,8 +58,8 @@ class SearchFilter
                         method_exists($model, 'isTranslatableAttribute') && $model->isTranslatableAttribute($field),
                         fn (Builder $query) => collect(config('app.locales'))
                             ->keys()
-                            ->each(fn ($locale) => $query->orWhere($field.'->'.$locale, $this->value)),
-                        fn (Builder $query) => $query->orWhere($table.'.'.$field, 'LIKE', $this->value)
+                            ->each(fn ($locale) => $query->orWhere($field . '->' . $locale, $this->value)),
+                        fn (Builder $query) => $query->orWhere($table . '.' . $field, 'LIKE', $this->value)
                     )
                 )
         );
@@ -71,22 +71,25 @@ class SearchFilter
         $table = $model->getTable();
         $filters = $model->getCustomFilters();
 
+        $searchable = count($this->exact)
+            ? $model->getSearchable()->intersect($this->exact)
+            : $model->getSearchable();
+
         return $query->where(
-            fn (Builder $query) => $model->getSearchable()
-                ->each(
-                    fn ($field) => $query->when(
-                        $filter = $filters->get($field),
-                        fn (Builder $query) => $query->orWhere(
-                            fn (Builder $query) => (new $filter())($query, $this->value, $field)
-                        ),
-                        fn (Builder $query) => $query->orWhere(
-                            fn (Builder $query) => Str::of($this->value)
-                                ->explode(' ')
-                                ->map(fn ($word) => $this->prepareRawValue($word))
-                                ->each(fn ($word) => $query->whereRaw('LOWER('.$table.'.'.$field.') LIKE ' . $word))
-                        )
+            fn (Builder $query) => $searchable->each(
+                fn ($field) => $query->when(
+                    $filter = $filters->get($field),
+                    fn (Builder $query) => $query->orWhere(
+                        fn (Builder $query) => (new $filter)($query, $this->value, $field)
+                    ),
+                    fn (Builder $query) => $query->orWhere(
+                        fn (Builder $query) => Str::of($this->value)
+                            ->explode(' ')
+                            ->map(fn ($word) => $this->prepareRawValue($word))
+                            ->each(fn ($word) => $query->whereRaw('LOWER(' . $table . '.' . $field . ') LIKE ' . $word))
                     )
                 )
+            )
         );
     }
 
@@ -107,22 +110,30 @@ class SearchFilter
             return $query;
         }
 
-        $relations = $model->getSearchableRelations();
+        $relations = $model
+            ->getSearchableRelations()
+            ->when(
+                count($this->exact),
+                fn ($items) => $items->filter(fn ($item) => in_array($item, $this->exact))
+            )
+            ->mapWithKeys(function ($relation) {
+                if (! Str::of($relation)->contains(':')) {
+                    return [$relation => []];
+                }
 
-        if (! $relations->count()) {
-            return $query;
-        }
+                [$key, $values] = explode(':', $relation, 2);
 
-        return $query->orWhere(
-            fn (Builder $query) => $relations
-                ->filter(fn ($relation) => $model->isRelation($relation))
-                ->each(
-                    fn ($relation) => $query->orWhereHas(
-                        $relation,
-                        fn (Builder $query) => $query->tap(new self($this->value, $this->strict))
-                    )
+                return [$key => explode(',', $values)];
+            })
+            ->filter(fn ($exact, $relation) => $model->isRelation($relation))
+            ->each(
+                fn ($exact, $relation) => $query->orWhereHas(
+                    $relation,
+                    fn (Builder $query) => $query->tap(new self($this->value, $this->strict, $exact))
                 )
-        );
+            );
+
+        return $query;
     }
 
     private function getKeySearchQuery(Builder $query): Builder
@@ -130,7 +141,7 @@ class SearchFilter
         $model = $query->getModel();
         $table = $model->getTable();
 
-        if (!$model->incrementing) {
+        if (! $model->incrementing) {
             return $query;
         }
 
@@ -140,11 +151,15 @@ class SearchFilter
             return $query;
         }
 
+        if (count($this->exact) && ! in_array($keyName, $this->exact)) {
+            return $query;
+        }
+
         return $query->orWhere(
             fn (Builder $query) => Str::of($this->value)
                 ->explode(',')
                 ->filter(fn ($value) => is_numeric($value))
-                ->each(fn ($value) => $query->orWhere($table.'.'.$keyName, $value))
+                ->each(fn ($value) => $query->orWhere($table . '.' . $keyName, $value))
         );
     }
 }
