@@ -21,10 +21,12 @@ class SearchFilter
             return $query;
         }
 
-        return $query
-            ->tap(fn (Builder $query) => $this->getSearchQuery($query))
-            ->tap(fn (Builder $query) => $this->getSearchableRelationsQuery($query))
-            ->tap(fn (Builder $query) => $this->getKeySearchQuery($query));
+        return $query->where(
+            fn (Builder $query) => $query
+                ->tap(fn (Builder $query) => $this->getSearchQuery($query))
+                ->tap(fn (Builder $query) => $this->getSearchableRelationsQuery($query))
+                ->tap(fn (Builder $query) => $this->getKeySearchQuery($query))
+        );
     }
 
     private function getSearchQuery(Builder $query): Builder
@@ -51,17 +53,20 @@ class SearchFilter
         $model = $query->getModel();
         $table = $model->getTable();
 
+        $searchable = count($this->exact)
+            ? $model->getSearchable()->intersect($this->exact)
+            : $model->getSearchable();
+
         return $query->where(
-            fn (Builder $query) => $model->getSearchable()
-                ->each(
-                    fn (string $field) => $query->when(
-                        method_exists($model, 'isTranslatableAttribute') && $model->isTranslatableAttribute($field),
-                        fn (Builder $query) => collect(config('app.locales'))
-                            ->keys()
-                            ->each(fn ($locale) => $query->orWhere($field . '->' . $locale, $this->value)),
-                        fn (Builder $query) => $query->orWhere($table . '.' . $field, 'LIKE', $this->value)
-                    )
+            fn (Builder $query) => $searchable->each(
+                fn (string $field) => $query->when(
+                    method_exists($model, 'isTranslatableAttribute') && $model->isTranslatableAttribute($field),
+                    fn (Builder $query) => collect(config('app.locales'))
+                        ->keys()
+                        ->each(fn ($locale) => $query->orWhere($field . '->' . $locale, $this->value)),
+                    fn (Builder $query) => $query->orWhere($table . '.' . $field, 'LIKE', $this->value)
                 )
+            )
         );
     }
 
@@ -125,15 +130,17 @@ class SearchFilter
 
                 return [$key => explode(',', $values)];
             })
-            ->filter(fn ($exact, $relation) => $model->isRelation($relation))
-            ->each(
-                fn ($exact, $relation) => $query->orWhereHas(
-                    $relation,
-                    fn (Builder $query) => $query->tap(new self($this->value, $this->strict, $exact))
-                )
-            );
+            ->filter(fn ($exact, $relation) => $model->isRelation($relation));
 
-        return $query;
+        return $query->orWhere(
+            fn (Builder $query) => $relations
+                ->each(
+                    fn ($exact, $relation) => $query->orWhereHas(
+                        $relation,
+                        fn (Builder $query) => $query->tap(new self($this->value, $this->strict, $exact))
+                    )
+                )
+        );
     }
 
     private function getKeySearchQuery(Builder $query): Builder
