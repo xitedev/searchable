@@ -15,7 +15,7 @@
         }
     ],
     "require": {
-        "php": "^8.2",
+        "php": "^8.4",
         "illuminate/contracts": "^11.0",
         "illuminate/support": "^11.0",
         "spatie/laravel-query-builder": "^6.2"
@@ -23,8 +23,8 @@
     "require-dev": {
         "roave/security-advisories": "dev-latest",
         "nunomaduro/collision": "^8.5",
-        "pestphp/pest": "^3.5",
-        "pestphp/pest-plugin-laravel": "^2.4"
+        "pestphp/pest": "^3.7",
+        "pestphp/pest-plugin-laravel": "^3.0"
     },
     "autoload": {
         "psr-4": {
